@@ -39,7 +39,6 @@ async function createDatabase() {
 }
 
 createDatabase().then(() => {
-  // Now, you can attempt to authenticate and start the application
   testDatabaseConnection().then(startup);
 });
 
