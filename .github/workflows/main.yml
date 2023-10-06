@@ -37,5 +37,5 @@ jobs:
           mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} -D ${{ secrets.MYSQL_DATABASE }} -e "SHOW DATABASES;"
 
       - name: Run Integration Tests in the Background
-        run: npx mocha tests/healthz.test.js &
+        run: npx mocha tests/healthz.test.js 
      #sds 
