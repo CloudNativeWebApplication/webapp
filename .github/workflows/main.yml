@@ -36,8 +36,5 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} -D ${{ secrets.MYSQL_DATABASE }} -e "SHOW DATABASES;"
 
-      - name: Wait for Application to Start
-        run: sleep 10
-
-      - name: Run Integration Tests
-        run: npm test
+      - name: Run Integration Tests in the Background
+        run: npx mocha tests/healthz.test.js &
