@@ -16,3 +16,5 @@ sudo apt install npm
 npx sequelize-cli db:migrate
 cd to webapp
 npm start
+
+//#changed read me 4:41
