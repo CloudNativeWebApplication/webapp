@@ -6,19 +6,28 @@ const { Sequelize } = require('sequelize');
 const bcrypt = require('bcrypt');
 const UserModel = require('./models/UserModel.js'); 
 const AssignmentModel = require('./models/AssignmentModel.js')
-//dvsnvs
+const dotenv = require('dotenv');
+
 const app = express();
 app.use(bodyParser.json());
-const PORT = 6060;
+const PORT = 6969;
 
 const filePath = './user.csv'; 
 loadUserCSV(filePath);
 
+dotenv.config();
 
+// Access environment variables
+const DATABASE_URL = process.env.DATABASE_URL;
+const DB_USERNAME = process.env.DB_USERNAME;
+const DB_PASSWORD = process.env.DB_PASSWORD;
 
-const sequelize = new Sequelize('mysql://root:newone@localhost', {
+const sequelize = new Sequelize(DATABASE_URL, {
   dialect: 'mysql',
+  username: DB_USERNAME,
+  password: DB_PASSWORD,
 });
+
 
 sequelize.query('CREATE DATABASE IF NOT EXISTS usersdb')
   .then(() => {
@@ -42,6 +51,25 @@ createDatabase().then(() => {
   testDatabaseConnection().then(startup);
 });
 
+const handleDatabaseError = (err, res) => {
+  console.error('Database Connection Error:', err);
+  res.status(503).json({ error: 'Service Unavailable' });
+};
+
+
+
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+
+  if (err.name === 'ECONNREFUSED') {
+    // Handle the case when there's no DB connection
+    res.status(503).json({ error: 'Service Unavailable' });
+  } else {
+    // Handle other errors
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 
 async function testDatabaseConnection() {
@@ -50,7 +78,6 @@ async function testDatabaseConnection() {
     console.log('Database connection has been established successfully.');
   } catch (error) {
     console.error('Unable to connect to the database:', error);
-    process.exit(1); // Exit the application if the database connection fails
   }
 }
 
@@ -163,7 +190,7 @@ app.route('/healthz')
       }
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: 'Internal Server Error' });
+      res.status(503).json({ error: 'Service unavailable' });
     }
   })
   .all((req, res) => {
@@ -325,39 +352,22 @@ app.post('/assignments', authenticate, async (req, res) => {
     // Associate the assignment with the authenticated user
     assignmentData.user_id = user.id;
 
-    const createdAssignment = await AssignmentModel.create(assignmentData);
+    // Attempt to create the assignment in the database
+    try {
+      const createdAssignment = await AssignmentModel.create(assignmentData);
 
-    res.status(201).json(createdAssignment);
+      res.status(201).json(createdAssignment);
+    } catch (dbError) {
+      // Handle database connection error
+      console.error('Database Connection Error:', dbError);
+      res.status(503).json({ error: 'Service Unavailable' });
+    }
   } catch (error) {
     console.error('Error creating assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-
-
-
-// Get all Assignments of a user by authentication
-app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
-  try {
-    // Use the authenticated user from the middleware
-    const authenticatedUser = req.user;
-
-    // Find all assignments associated with the authenticated user's id
-    const userAssignments = await AssignmentModel.findAll({
-      where: { user_id: authenticatedUser.id },
-    });
-
-    if (!userAssignments) {
-      return res.status(404).json({ error: 'Assignments not found for this user' });
-    }
-
-    res.status(200).json(userAssignments);
-  } catch (error) {
-    console.error('Error getting assignments for user:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 
 // Delete Assignment by ID
@@ -380,12 +390,14 @@ app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, 
     // Delete the assignment
     await assignment.destroy();
 
-    res.status(200).json({ message: 'Assignment successfully deleted' }); // Send success message
+    res.status(204).json({ message: 'Assignment successfully deleted' }); // Send success message
   } catch (error) {
     console.error('Error deleting assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
 
 
 
@@ -414,44 +426,76 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
   }
 });
 
+app.patch('/assignments/:id', (req, res) => {
+  res.status(405).json({ error: 'Update (PATCH) is not allowed' });
+});
 
+// Get all Assignments of a user by authentication
+app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
+  try {
+    // Use the authenticated user from the middleware
+    const authenticatedUser = req.user;
 
+    // Find all assignments associated with the authenticated user's id
+    const userAssignments = await AssignmentModel.findAll({
+      where: { user_id: authenticatedUser.id },
+    });
 
-// Update Assignment by ID (Authenticated Users Only)
-app.put('/assignments/:id', authenticate, async (req, res) => {
+    if (!userAssignments) {
+      return res.status(404).json({ error: 'Assignments not found for this user' });
+    }
+
+    res.status(200).json(userAssignments);
+  } catch (error) {
+    console.error('Error getting assignments for user:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.put('/assignments/:id', async (req, res) => {
   try {
     const assignmentId = req.params.id;
-    const authenticatedUserId = req.user.id; 
+    const updatedAssignmentData = req.body;
 
-    // Find the assignment by ID
     const assignment = await AssignmentModel.findByPk(assignmentId);
 
     if (!assignment) {
       return res.status(404).json({ error: 'Assignment not found' });
     }
 
-    // Check if the authenticated user is the assignment owner
-    if (assignment.user_id !== authenticatedUserId) {
-      return res.status(403).json({ error: 'Permission denied. You can only update your own assignments.' });
-    }
-
-    // Update assignment data here
-    const updatedAssignmentData = req.body;
-
-    if (updatedAssignmentData.name) {
+    // Validate and update each field
+    if ('name' in updatedAssignmentData && updatedAssignmentData.name !== null) {
       assignment.name = updatedAssignmentData.name;
+    } else {
+      return res.status(400).json({ error: 'name is required and cannot be null.' });
     }
 
-    if (updatedAssignmentData.points) {
-      assignment.points = updatedAssignmentData.points;
+    if ('points' in updatedAssignmentData && updatedAssignmentData.points !== null) {
+      const points = parseInt(updatedAssignmentData.points, 10);
+      if (!isNaN(points) && points >= 1 && points <= 10) {
+        assignment.points = points;
+      } else {
+        return res.status(400).json({ error: 'Invalid value for points. It must be an integer between 1 and 10.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'points is required and cannot be null.' });
     }
 
-    if (updatedAssignmentData.num_of_attempts) {
-      assignment.num_of_attempts = updatedAssignmentData.num_of_attempts;
+    if ('num_of_attempts' in updatedAssignmentData && updatedAssignmentData.num_of_attempts !== null) {
+      const num_of_attempts = parseInt(updatedAssignmentData.num_of_attempts, 10);
+      if (!isNaN(num_of_attempts) && num_of_attempts >= 1) {
+        assignment.num_of_attempts = num_of_attempts;
+      } else {
+        return res.status(400).json({ error: 'Invalid value for num_of_attempts. It must be an integer greater than or equal to 1.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'num_of_attempts is required and cannot be null.' });
     }
 
-    if (updatedAssignmentData.deadline) {
+    if ('deadline' in updatedAssignmentData && updatedAssignmentData.deadline !== null) {
       assignment.deadline = updatedAssignmentData.deadline;
+    } else {
+      return res.status(400).json({ error: 'deadline is required and cannot be null.' });
     }
 
     // Update the assignment_updated field
@@ -460,13 +504,12 @@ app.put('/assignments/:id', authenticate, async (req, res) => {
     // Save the updated assignment
     await assignment.save();
 
-    res.status(200).json(assignment);
+    res.status(204).json('');
   } catch (error) {
     console.error('Error updating assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
 
 
 testDatabaseConnection().then(() => {
@@ -478,6 +521,7 @@ testDatabaseConnection().then(() => {
 
 
 module.exports = app;
+
 
 
 
