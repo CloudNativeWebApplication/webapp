@@ -1,5 +1,7 @@
 const { Sequelize, DataTypes } = require('sequelize');
-const User = require('./UserModel'); // Import the User model
+const { v4: uuidv4 } = require('uuid'); // Import the UUID library
+const dotenv = require('dotenv');
+
 
 const sequelize = new Sequelize('usersdb', 'root', 'newone', {
   host: '127.0.0.1',
@@ -11,9 +13,9 @@ const sequelize = new Sequelize('usersdb', 'root', 'newone', {
 
 const Assignment = sequelize.define('Assignment', {
   id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID, // Change the data type to UUID
+    defaultValue: () => uuidv4(), // Generate a random UUID
     primaryKey: true,
-    autoIncrement: true,
   },
   name: {
     type: DataTypes.STRING,
@@ -47,8 +49,8 @@ const Assignment = sequelize.define('Assignment', {
     allowNull: false,
     readOnly: true,
   },
-  user_id: { // Add this column for the user who created the assignment
-    type: DataTypes.INTEGER,
+  user_id: {
+    type: DataTypes.UUID, // You can also use UUID for foreign keys
     allowNull: false,
   },
 }, {
@@ -56,7 +58,5 @@ const Assignment = sequelize.define('Assignment', {
   timestamps: false,
 });
 
-Assignment.belongsTo(User, { foreignKey: 'user_id' });
-
-
 module.exports = Assignment;
+

@@ -1,4 +1,5 @@
 const { Sequelize, DataTypes } = require('sequelize');
+const { v4: uuidv4 } = require('uuid');
 
 const sequelize = new Sequelize('usersdb', 'root', 'newone', {
   host: '127.0.0.1',
@@ -7,9 +8,9 @@ const sequelize = new Sequelize('usersdb', 'root', 'newone', {
 
 const User = sequelize.define('User', {
   id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     primaryKey: true,
-    autoIncrement: true,
+    defaultValue: () => uuidv4(),
   },
   first_name: {
     type: DataTypes.STRING,
@@ -49,3 +50,4 @@ const User = sequelize.define('User', {
 });
 
 module.exports = User;
+
