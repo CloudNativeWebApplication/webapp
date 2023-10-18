@@ -51,7 +51,6 @@ source "amazon-ebs" "custom" {
   instance_type = "t2.micro"
   ssh_username  = "admin"
   vpc_id        = var.vpc_id
-  subnet_id     = var.subnet_id
   region        = var.aws_region
 
   access_key = var.aws_access_key
@@ -76,8 +75,8 @@ build {
   }
 
   provisioner "file" {
-    source      = "my-repo-files.zip"
-    destination = "~/my-repo-files.zip"
+    source      = "mycode.zip"
+    destination = "~/mycode.zip"
   }
 
   provisioner "shell" {
@@ -103,7 +102,8 @@ build {
       "unzip my-repo-files.zip",
       "npm install",
       "npm uninstall bcrypt",
-      "npm install bcrypt"
+      "npm install bcrypt",
+      "sudo apt remove git -y"
     ]
   }
 
