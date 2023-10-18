@@ -21,8 +21,8 @@ jobs:
       - name: Upload Zip File
         uses: actions/upload-artifact@v2
         with:
-          name: my-repo-zip
-          path: my-repo-files.zip
+          name: codezip
+          path: mycode.zip
 
       - name: Install Packer plugin
         run: |
@@ -41,7 +41,6 @@ jobs:
           packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
                      -var "source_ami=${{ secrets.SOURCE_AMI }}" \
                      -var "vpc_id=${{ secrets.VPC_ID }}" \
-                     -var "subnet_id=${{ secrets.SUBNET_ID }}" \
                      -var "aws_region=${{ secrets.AWS_REGION }}" \
                      -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY}}" \
                      -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY}}" \
