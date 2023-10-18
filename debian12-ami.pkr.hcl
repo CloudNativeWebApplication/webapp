@@ -88,7 +88,7 @@ build {
       "y",
       "y",
       "EOF",
-      "unzip my-repo-files.zip",
+      "unzip mycode.zip",
       "npm install",
       "npm uninstall bcrypt",
       "npm install bcrypt",
