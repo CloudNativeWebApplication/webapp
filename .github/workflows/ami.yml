@@ -16,7 +16,7 @@ jobs:
 
       - name: Create Zip File
         run: |
-          zip -r my-repo-files.zip .
+          zip -r mycode.zip .
 
       - name: Upload Zip File
         uses: actions/upload-artifact@v2
