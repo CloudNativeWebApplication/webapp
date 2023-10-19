@@ -46,8 +46,8 @@ jobs:
 
       - name: Create Zip File
         run: |
-          zip -r mycode.zip . -x "node_modules/*" 
-          zip -ur mycode.zip .env
+          rm -r node_modules
+          zip -r mycode.zip .
 
       - name: Upload Zip File
         uses: actions/upload-artifact@v2
