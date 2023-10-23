@@ -40,7 +40,7 @@ source "amazon-ebs" "custom" {
   source_ami    = var.source_ami
   instance_type = "t2.micro"
   ssh_username  = "admin"
-  region        = var.aws_region
+  region        =          var.aws_region
 
   access_key = var.aws_access_key
   secret_key = var.aws_secret_access_key
@@ -48,7 +48,7 @@ source "amazon-ebs" "custom" {
 
   ami_users = [var.demo_account_id]
 
-}
+
 
 
 build {
