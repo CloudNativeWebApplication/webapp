@@ -38,11 +38,6 @@ jobs:
       - name: Run Integration Tests in the Background
         run: npx mocha tests/healthz.test.js &
 
-      - name: Create .env File
-        run: |
-          echo "DATABASE_URL=mysql://root:${{ secrets.MYSQL_ROOT_PASSWORD }}@127.0.0.1" > .env
-          echo "DB_USERNAME=root" >> .env
-          echo "DB_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
 
       - name: Create Zip File
         run: |
