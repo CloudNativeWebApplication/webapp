@@ -94,7 +94,6 @@ build {
       "sudo apt update",
       "sudo apt install -y nodejs npm",
       "sudo apt update",
-      "sudo systemctl enable mariadb",
       "sudo apt install -y unzip",
       "unzip mycode.zip",
       "npm install",
