@@ -54,14 +54,6 @@ source "amazon-ebs" "custom" {
 build {
   sources = ["source.amazon-ebs.custom"]
 
-  provisioner "shell" {
-    inline = [
-      "echo 'Customization steps here'",
-      "sudo apt-get update",
-      "echo 'Additional customization steps here'",
-      "sudo apt install -y zip"
-    ]
-  }
 
   provisioner "file" {
     source      = "mycode.zip"
@@ -71,23 +63,14 @@ build {
 
   provisioner "shell" {
     inline = [
-      "sudo apt update",
+      "set -e", // Exit on error
+      "sudo apt-get update",
       "sudo apt install -y nodejs npm unzip",
       "unzip mycode.zip",
       "sudo chown -R csye6225:csye6225 /opt/csye6225",
-    ]
-  }
-
-  provisioner "shell" {
-    inline = [
       "sudo su - csye6225 -c 'cd /opt/csye6225 && npm install'",
       "sudo su - csye6225 -c 'cd /opt/csye6225 && npm uninstall bcrypt'",
       "sudo su - csye6225 -c 'cd /opt/csye6225 && npm install bcrypt'",
-    ]
-  }
-
-  provisioner "shell" {
-    inline = [
       "sudo apt remove git -y",
       "sudo mv myapp.service /etc/systemd/system/",
       "sudo systemctl daemon-reload",
@@ -95,6 +78,7 @@ build {
       "sudo systemctl start myapp.service",
     ]
   }
+
 
 
 
