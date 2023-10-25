@@ -70,29 +70,39 @@ build {
 
   provisioner "shell" {
     inline = [
+      "cat <<EOF | sudo tee /etc/systemd/system/myapp.service",
+      "[Unit]",
+      "Description=My Node.js Application",
+      "After=cloud-init.target",
+      "Wants=cloud-init.target",
+      "",
+      "[Service]",
+      "Type=simple",
+      "ExecStart=/usr/bin/node /home/admin/app.js",
+      "WorkingDirectory=/home/admin/",
+      "User=root",
+      "",
+      "[Install]",
+      "WantedBy=multi-user.target",
+      "EOF",
+      "sudo systemctl daemon-reload"
+    ]
+  }
+
+  provisioner "shell" {
+    inline = [
       "sudo apt update",
       "sudo apt install -y nodejs npm",
       "sudo apt update",
-      "sudo apt install -y mariadb-server",
-      "sudo systemctl start mariadb",
       "sudo systemctl enable mariadb",
       "sudo apt install -y unzip",
-      "sudo mysql_secure_installation <<EOF",
-      "newone",
-      "y",
-      "y",
-      "newone",
-      "newone",
-      "y",
-      "y",
-      "y",
-      "y",
-      "EOF",
       "unzip mycode.zip",
       "npm install",
       "npm uninstall bcrypt",
       "npm install bcrypt",
-      "sudo apt remove git -y"
+      "sudo apt remove git -y",
+      "sudo systemctl enable myapp.service",
+      "sudo systemctl start myapp.service"
     ]
   }
 
