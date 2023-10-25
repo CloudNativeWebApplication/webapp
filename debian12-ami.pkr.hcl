@@ -79,7 +79,7 @@ build {
       "sudo apt install -y nodejs npm",
       "sudo apt update",
       "sudo apt install -y unzip",
-      "unzip mycode.zip",
+      "sudo unzip mycode.zip -d .",
       "sudo chown -R csye6225:csye6225 /opt/csye6225",
       "npm install",
       "npm uninstall bcrypt",
