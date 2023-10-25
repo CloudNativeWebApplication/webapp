@@ -1,8 +1,10 @@
 const { Sequelize, DataTypes } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 const dotenv = require('dotenv');
 
-dotenv.config();
+// Load the .env file from the appropriate directory
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Access environment variables
 const DATABASE_URL = process.env.DATABASE_URL;
