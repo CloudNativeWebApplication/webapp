@@ -71,11 +71,16 @@ build {
 
   provisioner "shell" {
     inline = [
+      "sudo groupadd csye6225",
+      "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
+      "sudo mv mycode.zip /opt/csye6225/",
+      "cd /opt/csye6225/",
       "sudo apt update",
       "sudo apt install -y nodejs npm",
       "sudo apt update",
       "sudo apt install -y unzip",
       "unzip mycode.zip",
+      "sudo chown -R csye6225:csye6225 /opt/csye6225",
       "npm install",
       "npm uninstall bcrypt",
       "npm install bcrypt",
@@ -87,6 +92,7 @@ build {
 
     ]
   }
+
 
 
 }
