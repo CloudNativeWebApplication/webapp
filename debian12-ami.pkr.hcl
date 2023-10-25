@@ -64,6 +64,9 @@ build {
   provisioner "shell" {
     inline = [
       "set -e", // Exit on error
+      "sudo groupadd csye6225",
+      "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
+      "sudo mv mycode.zip /opt/csye6225/",
       "sudo apt-get update",
       "sudo apt install -y nodejs npm unzip",
       "unzip mycode.zip",
