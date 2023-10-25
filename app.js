@@ -21,6 +21,8 @@ dotenv.config();
 const DATABASE_URL = process.env.DATABASE_URL;
 const DB_USERNAME = process.env.DB_USERNAME;
 const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_NAME = process.env.DB_NAME
+
 
 const sequelize = new Sequelize(DATABASE_URL, {
   dialect: 'mysql',
@@ -31,7 +33,7 @@ const sequelize = new Sequelize(DATABASE_URL, {
 
 async function createDatabase() {
   try {
-    await sequelize.query('CREATE DATABASE IF NOT EXISTS csye6225;');
+    await sequelize.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME};`);
     console.log('Database created successfully.');
   } catch (error) {
     console.error('Error creating database:', error);
@@ -280,16 +282,35 @@ app.use(express.json());
 // Create Assignment
 app.post('/assignments', authenticate, async (req, res) => {
   try {
+    await sequelize.authenticate();
     // Specify the fields you want to accept
     const allowedFields = ['name', 'points', 'num_of_attempts', 'deadline'];
 
-    // Extract only the allowed fields from the request body
-    const assignmentData = {};
+      // Extract only the allowed fields from the request body
+      const assignmentData = {};
+      for (const field of allowedFields) {
+        if (req.body[field]) {
+          assignmentData[field] = req.body[field];
+        }
+      }
+
     for (const field of allowedFields) {
-      if (req.body[field]) {
-        assignmentData[field] = req.body[field];
+      if (req.body[field] !== undefined) {
+        // Perform data type validation for each field
+        if (field === 'name' && typeof req.body[field] === 'string') {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'points' && Number.isInteger(req.body[field])) {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'num_of_attempts' && Number.isInteger(req.body[field]) && req.body[field] >= 1) {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'deadline' && !isNaN(Date.parse(req.body[field]))) {
+          assignmentData[field] = req.body[field];
+        } else {
+          return res.status(400).json({ error: `Invalid data type for field: ${field}` });
+        }
       }
     }
+
 
     // Validate assignment data here
     if (
@@ -324,17 +345,17 @@ app.post('/assignments', authenticate, async (req, res) => {
 
     // Attempt to create the assignment in the database
     try {
+      
       const createdAssignment = await AssignmentModel.create(assignmentData);
 
       res.status(201).json(createdAssignment);
-    } catch (dbError) {
-      // Handle database connection error
-      console.error('Database Connection Error:', dbError);
-      res.status(503).json({ error: 'Service Unavailable' });
+    } catch (error) {
+      console.error(error);
+      res.status(503).json({ error: 'Service unavailable' });
     }
   } catch (error) {
-    console.error('Error creating assignment:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error(error);
+    res.status(503).json({ error: 'Service unavailable' });
   }
 });
 
@@ -392,7 +413,7 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
     res.status(200).json(assignment);
   } catch (error) {
     console.error('Error getting assignment by ID:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(503).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -418,7 +439,7 @@ app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) =>
     res.status(200).json(userAssignments);
   } catch (error) {
     console.error('Error getting assignments for user:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(503).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -429,8 +450,27 @@ app.put('/assignments/:id', async (req, res) => {
 
     const assignment = await AssignmentModel.findByPk(assignmentId);
 
+    const allowedFields = ['email', 'password', 'first_name', 'last_name'];
+
     if (!assignment) {
       return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        // Perform data type validation for each field
+        if (field === 'name' && typeof req.body[field] === 'string') {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'points' && Number.isInteger(req.body[field])) {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'num_of_attempts' && Number.isInteger(req.body[field]) && req.body[field] >= 1) {
+          assignmentData[field] = req.body[field];
+        } else if (field === 'deadline' && !isNaN(Date.parse(req.body[field]))) {
+          assignmentData[field] = req.body[field];
+        } else {
+          return res.status(400).json({ error: `Invalid data type for field: ${field}` });
+        }
+      }
     }
 
     // Validate and update each field
