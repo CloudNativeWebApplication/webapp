@@ -3,13 +3,21 @@ const { v4: uuidv4 } = require('uuid'); // Import the UUID library
 const dotenv = require('dotenv');
 
 
-const sequelize = new Sequelize('usersdb', 'root', 'newone', {
-  host: '127.0.0.1',
+dotenv.config();
+
+const DATABASE_URL = process.env.DATABASE_URL;
+const DB_USERNAME = process.env.DB_USERNAME;
+const DB_PASSWORD = process.env.DB_PASSWORD;
+
+const sequelize = new Sequelize(DATABASE_URL, {
   dialect: 'mysql',
+  username: DB_USERNAME,
+  password: DB_PASSWORD,
   dialectOptions: {
     createDatabaseIfNotExists: true,
   },
 });
+
 
 const Assignment = sequelize.define('Assignment', {
   id: {
