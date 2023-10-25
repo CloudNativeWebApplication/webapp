@@ -63,22 +63,23 @@ build {
 
   provisioner "shell" {
     inline = [
-      "set -e", // Exit on error
+
       "sudo groupadd csye6225",
       "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
-      "sudo mv mycode.zip /opt/csye6225/",
-      "sudo apt-get update",
-      "sudo apt install -y nodejs npm unzip",
-      "unzip mycode.zip",
+      "sudo mv mycode.zip /opt/csye6225/ ",
+      "echo 'unzipping the file'",
+      "cd /opt/csye6225/",
+      "sudo unzip mycode.zip -d .",
+      "echo 'changing the permissions of script file and running the script'",
+      "sudo chmod +x ./script.sh",
       "sudo chown -R csye6225:csye6225 /opt/csye6225",
-      "sudo su - csye6225 -c 'cd /opt/csye6225 && npm install'",
-      "sudo su - csye6225 -c 'cd /opt/csye6225 && npm uninstall bcrypt'",
-      "sudo su - csye6225 -c 'cd /opt/csye6225 && npm install bcrypt'",
+      "sudo ./script.sh",
       "sudo apt remove git -y",
-      "sudo mv myapp.service /etc/systemd/system/",
+      "ls -al",
+      "sudo mv app.service /etc/systemd/system/",
       "sudo systemctl daemon-reload",
-      "sudo systemctl enable myapp.service",
-      "sudo systemctl start myapp.service",
+      "sudo systemctl enable app",
+      "sudo systemctl start app"
     ]
   }
 
