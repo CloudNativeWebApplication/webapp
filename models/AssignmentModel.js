@@ -5,17 +5,15 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const DATABASE_URL = process.env.DATABASE_URL;
 const DB_USERNAME = process.env.DB_USERNAME;
 const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_HOST = process.env.DB_HOST;
+const DB_NAME = process.env.DB_NAME
 
-const sequelize = new Sequelize(DATABASE_URL, {
+
+const sequelize = new Sequelize(DB_NAME,DB_USERNAME,DB_PASSWORD, {
   dialect: 'mysql',
-  username: DB_USERNAME,
-  password: DB_PASSWORD,
-  dialectOptions: {
-    createDatabaseIfNotExists: true,
-  },
+  host: DB_HOST,
 });
 
 

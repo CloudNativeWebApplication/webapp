@@ -29,18 +29,9 @@ const sequelize = new Sequelize(DATABASE_URL, {
 });
 
 
-sequelize.query('CREATE DATABASE IF NOT EXISTS usersdb')
-  .then(() => {
-    console.log('Database created (if it did not exist)');
-  })
-  .catch((error) => {
-    console.error('Error creating database:', error);
-  });
-
-
 async function createDatabase() {
   try {
-    await sequelize.query('CREATE DATABASE IF NOT EXISTS usersdb;');
+    await sequelize.query('CREATE DATABASE IF NOT EXISTS csye6225;');
     console.log('Database created successfully.');
   } catch (error) {
     console.error('Error creating database:', error);
@@ -51,25 +42,7 @@ createDatabase().then(() => {
   testDatabaseConnection().then(startup);
 });
 
-const handleDatabaseError = (err, res) => {
-  console.error('Database Connection Error:', err);
-  res.status(503).json({ error: 'Service Unavailable' });
-};
-
-
-
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-
-  if (err.name === 'ECONNREFUSED') {
-    // Handle the case when there's no DB connection
-    res.status(503).json({ error: 'Service Unavailable' });
-  } else {
-    // Handle other errors
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
+startup();
 
 
 async function testDatabaseConnection() {
@@ -254,9 +227,6 @@ app.route('/users')
   .delete((req, res) => {
     res.status(405).json({ error: 'Deletion is not allowed' });
   });
-
-// Call the testDatabaseConnection and startup functions when your application starts
-testDatabaseConnection().then(startup);
 
 
 
