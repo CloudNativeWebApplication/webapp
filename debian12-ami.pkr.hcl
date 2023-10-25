@@ -69,7 +69,25 @@ build {
   }
 
   provisioner "shell" {
-  
+    inline = [
+      "cat <<EOF | sudo tee /etc/systemd/system/myapp.service",
+      "[Unit]",
+      "Description=My Node.js Application",
+      "After=cloud-init.target",
+      "Wants=cloud-init.target",
+      "",
+      "[Service]",
+      "Type=simple",
+      "ExecStart=/usr/bin/node /home/admin/app.js",
+      "WorkingDirectory=/home/admin/",
+      "User=root",
+      "",
+      "[Install]",
+      "WantedBy=multi-user.target",
+      "EOF",
+      "sudo systemctl daemon-reload"
+    ]
+  }
 
   provisioner "shell" {
     inline = [
@@ -86,7 +104,7 @@ build {
       "sudo systemctl daemon-reload",
       "sudo systemctl enable myapp.service",
       "sudo systemctl start myapp.service",
-    
+
     ]
   }
 
