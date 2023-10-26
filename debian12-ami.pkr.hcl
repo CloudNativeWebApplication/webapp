@@ -77,10 +77,10 @@ build {
       "sudo ./script.sh",
       "sudo apt remove git -y",
       "ls -al",
-      "sudo mv app.service /etc/systemd/system/",
+      "sudo mv myapp.service /etc/systemd/system/",
       "sudo systemctl daemon-reload",
-      "sudo systemctl enable app",
-      "sudo systemctl start app"
+      "sudo systemctl enable myapp",
+      "sudo systemctl start myapp"
     ]
   }
 
