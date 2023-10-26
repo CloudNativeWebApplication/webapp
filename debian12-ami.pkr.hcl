@@ -65,6 +65,7 @@ build {
     inline = [
       "sudo groupadd csye6225",
       "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
+      "sudo apt update",
       "sudo mv mycode.zip /opt/csye6225/ ",
       "echo 'unzipping the file'",
       "cd /opt/csye6225/",
