@@ -63,15 +63,15 @@ build {
 
   provisioner "shell" {
     inline = [
-
       "sudo groupadd csye6225",
       "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
       "sudo mv mycode.zip /opt/csye6225/ ",
       "echo 'unzipping the file'",
       "cd /opt/csye6225/",
       "echo 'changing the permissions of script file and running the script'",
-      "sudo chmod +x ./script.sh",
+      "sudo apt install -y unzip",
       "sudo unzip mycode.zip -d .",
+      "sudo chmod +x ./script.sh",
       "sudo chown -R csye6225:csye6225 /opt/csye6225",
       "sudo ./script.sh",
       "sudo apt remove git -y",
