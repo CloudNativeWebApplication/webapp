@@ -85,18 +85,18 @@ build {
       "sudo mv myapp.service /etc/systemd/system/",
       "sudo systemctl daemon-reload",
       "sudo systemctl enable myapp",
-      "sudo systemctl start myapp"
+      "sudo systemctl start myapp",
+      "curl https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o amazon-cloudwatch-agent.deb",
+      "sudo dpkg -i -E ./amazon-cloudwatch-agent.deb",
+      "sudo systemctl enable amazon-cloudwatch-agent",
+      "sudo systemctl start amazon-cloudwatch-agent"
+
     ]
 
 
-    provisioner "shell" {
-      inline = [
-        "curl https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o amazon-cloudwatch-agent.deb",
-        "sudo dpkg -i -E ./amazon-cloudwatch-agent.deb",
-        "sudo systemctl enable amazon-cloudwatch-agent",
-        "sudo systemctl start amazon-cloudwatch-agent"
-      ]
-    }
+
+
+
   }
 
 
