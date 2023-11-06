@@ -60,11 +60,6 @@ build {
     destination = "~/mycode.zip"
   }
 
-  provisioner "file" {
-    source      = "cloud-watchconfig.json"
-    destination = "/opt/aws/amazon-cloudwatch-agent/etc/cloud-watchconfig.json"
-  }
-
 
   provisioner "shell" {
     inline = [
@@ -86,10 +81,6 @@ build {
       "sudo systemctl daemon-reload",
       "sudo systemctl enable myapp",
       "sudo systemctl start myapp",
-      "curl https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o amazon-cloudwatch-agent.deb",
-      "sudo dpkg -i -E ./amazon-cloudwatch-agent.deb",
-      "sudo systemctl enable amazon-cloudwatch-agent",
-      "sudo systemctl start amazon-cloudwatch-agent"
 
     ]
 
