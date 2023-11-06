@@ -7,6 +7,39 @@ const bcrypt = require('bcrypt');
 const UserModel = require('./models/UserModel.js'); 
 const AssignmentModel = require('./models/AssignmentModel.js')
 const dotenv = require('dotenv');
+const winston = require('winston');
+
+const logger = winston.createLogger({
+  level: 'silly',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.File({ filename: 'csye6225.log' })
+  ]
+});
+
+// // If we're not in production, log to the `console` with the format:
+// // `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
+// if (process.env.NODE_ENV !== 'production') {
+//   logger.add(new winston.transports.Console({
+//     format: winston.format.simple()
+//   }));
+// }
+
+const StatsD = require('hot-shots');
+const statsd = new StatsD({
+  host: 'localhost', // If your StatsD server is running on the same server
+  port: 8125, // The default port for StatsD
+  prefix: 'myapp.', // Optional prefix for all your metrics
+  errorHandler: error => {
+    console.error('StatsD error: ', error);
+  }
+});
+
+// Increment a counter
+statsd.increment('endpoint.hits');
+
+// Timing: sends a timing command with the specified milliseconds
+statsd.timing('response_time', 42);
 
 const app = express();
 app.use(bodyParser.json());
@@ -34,7 +67,9 @@ const sequelize = new Sequelize(DATABASE_URL, {
 async function createDatabase() {
   try {
     await sequelize.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME};`);
+    logger.log(' database created')
     console.log('Database created successfully.');
+    
   } catch (error) {
     console.error('Error creating database:', error);
   }
@@ -51,6 +86,7 @@ async function testDatabaseConnection() {
   try {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
+
   } catch (error) {
     console.error('Unable to connect to the database:', error);
   }
@@ -151,6 +187,7 @@ app.route('/healthz')
         if (req.body && Object.keys(req.body).length > 0) {
           // Reject the request with a 400 Bad Request status code
           res.status(400).send('GET requests should not include a request body');
+          
         } else {
           // Handle GET request
 
@@ -159,77 +196,20 @@ app.route('/healthz')
 
           res.setHeader('Cache-Control', 'no-cache');
           res.status(200).send()
+          logger.http('Health check passed', { timestamp: new Date().toString() });
+
         }
-      } else {
-        res.status(405).json({ error: 'Method Not Allowed' });
-      }
+      } 
     } catch (error) {
       console.error(error);
+      logger.error(`Health check failed: ${error.message}`);
       res.status(503).json({ error: 'Service unavailable' });
     }
   })
   .all((req, res) => {
+    logger.error(`Attempt to access /healthz with unsupported method ${req.method}`, { timestamp: new Date().toString() });
     res.status(405).json({ error: 'Method Not Allowed' });
   });
-
-
-
-
-// Modify the route for the /users endpoint to handle POST and GET only
-app.route('/users')
-  .post(async (req, res) => {
-    try {
-      // Specify the fields you want to accept
-      const allowedFields = ['email', 'password', 'first_name', 'last_name'];
-
-      // Extract only the allowed fields from the request body
-      const userData = {};
-      for (const field of allowedFields) {
-        if (req.body[field]) {
-          userData[field] = req.body[field];
-        }
-      }
-
-      // Check if all required fields are present
-      if (!userData.email || !userData.password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-      }
-
-      // Check if a user with the same email already exists in the database
-      const existingUser = await UserModel.findOne({ where: { email: userData.email } });
-
-      if (existingUser) {
-        return res.status(409).json({ error: 'User with the same email already exists' });
-      }
-
-      // Hash the password using BCrypt
-      const hashedPassword = await hashPassword(userData.password);
-
-      // Insert the user into the database
-      await UserModel.create({
-        first_name: userData.first_name,
-        last_name: userData.last_name,
-        email: userData.email,
-        password: hashedPassword,
-      });
-
-      // Append the user data to the CSV file
-      const csvData = `${userData.first_name},${userData.last_name},${userData.email},${hashedPassword}\n`;
-      fs.writeFileSync(filePath, csvData, { flag: 'a' }); // 'a' flag appends data and creates the file if it doesn't exist
-
-      res.status(201).json({ message: 'User inserted successfully' });
-    } catch (error) {
-      console.error('Error inserting user:', error);
-      res.status(500).json({ error: 'Internal Server Error' });
-    }
-  })
-
-
-  // Add a custom route handler for DELETE requests
-  .delete((req, res) => {
-    res.status(405).json({ error: 'Deletion is not allowed' });
-  });
-
 
 
 async function hashPassword(password) {
@@ -262,7 +242,7 @@ const authenticate = async (req, res, next) => {
     if (!user || !(await bcrypt.compare(providedPassword, user.password))) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
-    }
+    } 
 
     // Attach the user object to the request for later use, e.g., req.user
     req.user = user;
@@ -349,6 +329,7 @@ app.post('/assignments', authenticate, async (req, res) => {
       const createdAssignment = await AssignmentModel.create(assignmentData);
 
       res.status(201).json(createdAssignment);
+      logger.http('assignment is created', { timestamp: new Date().toString() });
     } catch (error) {
       console.error(error);
       res.status(503).json({ error: 'Service unavailable' });
@@ -419,6 +400,7 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
 
 app.patch('/assignments/:id', (req, res) => {
   res.status(405).json({ error: 'Update (PATCH) is not allowed' });
+
 });
 
 // Get all Assignments of a user by authentication
@@ -521,10 +503,19 @@ app.put('/assignments/:id', async (req, res) => {
   }
 });
 
+logger.exceptions.handle(
+  new winston.transports.File({ filename: 'exceptions.log' })
+);
+
+process.on('unhandledRejection', (ex) => {
+  throw ex;
+});
+
 
 testDatabaseConnection().then(() => {
   app.listen(PORT, () => {
     console.log('Server running on ' + PORT);
+    logger.info('Server is running');
   });
 });
 
