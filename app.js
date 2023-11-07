@@ -9,7 +9,6 @@ const AssignmentModel = require('./models/AssignmentModel.js')
 const dotenv = require('dotenv');
 const winston = require('winston');
 const StatsD = require('node-statsd');
-const client = new StatsD();
 
 const logger = winston.createLogger({
   level: 'silly',
@@ -204,6 +203,7 @@ app.route('/healthz')
   .all((req, res) => {
     logger.error(`Attempt to access /healthz with unsupported method ${req.method}`, { timestamp: new Date().toString() });
     res.status(405).json({ error: 'Method Not Allowed' });
+    client.increment('endpoint.healthzothermethod.hits');
   });
 
 
