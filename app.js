@@ -8,6 +8,8 @@ const UserModel = require('./models/UserModel.js');
 const AssignmentModel = require('./models/AssignmentModel.js')
 const dotenv = require('dotenv');
 const winston = require('winston');
+const StatsD = require('node-statsd');
+const client = new StatsD();
 
 const logger = winston.createLogger({
   level: 'silly',
@@ -25,21 +27,7 @@ const logger = winston.createLogger({
 //   }));
 // }
 
-const StatsD = require('hot-shots');
-const statsd = new StatsD({
-  host: 'localhost', // If your StatsD server is running on the same server
-  port: 8125, // The default port for StatsD
-  prefix: 'myapp.', // Optional prefix for all your metrics
-  errorHandler: error => {
-    console.error('StatsD error: ', error);
-  }
-});
 
-// Increment a counter
-statsd.increment('endpoint.hits');
-
-// Timing: sends a timing command with the specified milliseconds
-statsd.timing('response_time', 42);
 
 const app = express();
 app.use(bodyParser.json());
@@ -195,6 +183,7 @@ app.route('/healthz')
           await sequelize.authenticate();
 
           res.setHeader('Cache-Control', 'no-cache');
+          client.increment('endpoint.healthz.hits');
           res.status(200).send()
           logger.http('Health check passed', { timestamp: new Date().toString() });
 
