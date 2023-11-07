@@ -60,7 +60,7 @@ const sequelize = new Sequelize(DATABASE_URL, {
 async function createDatabase() {
   try {
     await sequelize.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME};`);
-    logger.log(' database created')
+    logger.log('database created')
     console.log('Database created successfully.');
     
   } catch (error) {
@@ -180,6 +180,7 @@ app.route('/healthz')
         if (req.body && Object.keys(req.body).length > 0) {
           // Reject the request with a 400 Bad Request status code
           res.status(400).send('GET requests should not include a request body');
+
           
         } else {
           // Handle GET request
@@ -325,6 +326,8 @@ app.post('/assignments', authenticate, async (req, res) => {
 
       res.status(201).json(createdAssignment);
       logger.http('assignment is created', { timestamp: new Date().toString() });
+      client.increment('endpoint.assignment.post.hit');
+      
     } catch (error) {
       console.error(error);
       res.status(503).json({ error: 'Service unavailable' });
@@ -358,6 +361,7 @@ app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, 
     await assignment.destroy();
 
     res.status(204).json({ message: 'Assignment successfully deleted' }); // Send success message
+    client.increment('endpoint.assignment.delete.hit');
   } catch (error) {
     console.error('Error deleting assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -387,6 +391,7 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
     }
 
     res.status(200).json(assignment);
+    client.increment('endpoint.assignment.getbyid.hit');
   } catch (error) {
     console.error('Error getting assignment by ID:', error);
     res.status(503).json({ error: 'Internal Server Error' });
@@ -414,6 +419,7 @@ app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) =>
     }
 
     res.status(200).json(userAssignments);
+    client.increment('endpoint.assignments.get.hit');
   } catch (error) {
     console.error('Error getting assignments for user:', error);
     res.status(503).json({ error: 'Internal Server Error' });
@@ -492,6 +498,7 @@ app.put('/assignments/:id', async (req, res) => {
     await assignment.save();
 
     res.status(204).json('');
+    client.increment('endpoint.assignment.put.hit');
   } catch (error) {
     console.error('Error updating assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
