@@ -21,6 +21,7 @@
     "nodemon": "^3.0.1",
     "path": "^0.12.7",
     "pg-promise": "^11.5.4",
+    "node-statsd": "^0.1.1",
     "sequelize": "^6.33.0",
     "sequelize-cli": "^6.6.1",
     "statsd": "^0.9.0",
