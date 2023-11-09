@@ -10,27 +10,7 @@ const dotenv = require('dotenv');
 const winston = require('winston');
 const StatsD = require('node-statsd');
 
-const logger = winston.createLogger({
-  level: 'silly',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'csye6225.log' })
-  ]
-});
 
-const client = new StatsD({
-  errorHandler: function (error) {
-    console.error("StatsD error: ", error);
-  }
-});
-
-// // If we're not in production, log to the `console` with the format:
-// // `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
-// if (process.env.NODE_ENV !== 'production') {
-//   logger.add(new winston.transports.Console({
-//     format: winston.format.simple()
-//   }));
-// }
 
 
 
@@ -60,7 +40,7 @@ const sequelize = new Sequelize(DATABASE_URL, {
 async function createDatabase() {
   try {
     await sequelize.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME};`);
-    logger.log('database created')
+    logger.info('database created')
     console.log('Database created successfully.');
     
   } catch (error) {
@@ -173,6 +153,21 @@ async function startup() {
 
 app.use(express.json());
      
+
+const logger = winston.createLogger({
+  level: 'silly',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.File({ filename: 'csye6225.log' })
+  ]
+});
+
+const client = new StatsD({
+  errorHandler: function (error) {
+    console.error("StatsD error: ", error);
+  }
+});
+
 app.route('/healthz')
   .get(rejectRequestsWithBody, async (req, res) => {
     try {
@@ -180,6 +175,7 @@ app.route('/healthz')
         if (req.body && Object.keys(req.body).length > 0) {
           // Reject the request with a 400 Bad Request status code
           res.status(400).send('GET requests should not include a request body');
+          logger.warn('body is not allowed')
 
           
         } else {
@@ -189,9 +185,10 @@ app.route('/healthz')
           await sequelize.authenticate();
 
           res.setHeader('Cache-Control', 'no-cache');
-          client.increment('endpoint.healthz.hits');
+          
           res.status(200).send()
           logger.http('Health check passed', { timestamp: new Date().toString() });
+          client.increment('endpoint.healthz.hits');
 
         }
       } 
@@ -256,7 +253,7 @@ app.use(express.json());
 
 
 // Create Assignment
-app.post('/assignments', authenticate, async (req, res) => {
+app.post('/v1/assignments', authenticate, async (req, res) => {
   try {
     await sequelize.authenticate();
     // Specify the fields you want to accept
@@ -341,7 +338,7 @@ app.post('/assignments', authenticate, async (req, res) => {
 
 
 // Delete Assignment by ID
-app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.delete('/v1/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
 
@@ -354,6 +351,7 @@ app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, 
 
     // Check if the authenticated user is the assignment owner
     if (assignment.user_id !== req.user.id) {
+      logger.error('user is trying to delete other user assignments');
       return res.status(403).json({ error: 'Permission denied. You can only delete your own assignments.' });
     }
 
@@ -361,7 +359,10 @@ app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, 
     await assignment.destroy();
 
     res.status(204).json({ message: 'Assignment successfully deleted' }); // Send success message
+
+    logger.http('assignment is deleted', { timestamp: new Date().toString() });
     client.increment('endpoint.assignment.delete.hit');
+
   } catch (error) {
     console.error('Error deleting assignment:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -371,10 +372,8 @@ app.delete('/assignments/:id',rejectRequestsWithBody, authenticate, async (req, 
 
 
 
-
-
 // Get Assignment by ID
-app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v1/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.assignmentId;
 
@@ -387,6 +386,7 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
 
     // Check if the authenticated user is the assignment owner
     if (assignment.user_id !== req.user.id) {
+      logger.error('user is trying to access other user assignments');
       return res.status(403).json({ error: 'Permission denied. You can only access your own assignments.' });
     }
 
@@ -398,27 +398,30 @@ app.get('/assignments/:assignmentId', rejectRequestsWithBody, authenticate, asyn
   }
 });
 
-app.patch('/assignments/:id', (req, res) => {
+app.patch('/v1/assignments/:id', (req, res) => {
   res.status(405).json({ error: 'Update (PATCH) is not allowed' });
 
 });
 
 // Get all Assignments of a user by authentication
-app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v1/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     // Use the authenticated user from the middleware
     const authenticatedUser = req.user;
 
     // Find all assignments associated with the authenticated user's id
     const userAssignments = await AssignmentModel.findAll({
-      where: { user_id: authenticatedUser.id },
+      where: { user_id: authenticatedUser.id },   
     });
-
+        
     if (!userAssignments) {
+      logger.error('assignment is not found');
       return res.status(404).json({ error: 'Assignments not found for this user' });
+      
     }
 
     res.status(200).json(userAssignments);
+    logger.http("got user assignment")
     client.increment('endpoint.assignments.get.hit');
   } catch (error) {
     console.error('Error getting assignments for user:', error);
@@ -426,7 +429,7 @@ app.get('/assignments',rejectRequestsWithBody, authenticate, async (req, res) =>
   }
 });
 
-app.put('/assignments/:id', async (req, res) => {
+app.put('/v1/assignments/:id', async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const updatedAssignmentData = req.body;
@@ -506,7 +509,7 @@ app.put('/assignments/:id', async (req, res) => {
 });
 
 logger.exceptions.handle(
-  new winston.transports.File({ filename: 'exceptions.log' })
+  new winston.transports.File({ filename: 'csye6225.log' })
 );
 
 process.on('unhandledRejection', (ex) => {
@@ -517,9 +520,11 @@ process.on('unhandledRejection', (ex) => {
 testDatabaseConnection().then(() => {
   app.listen(PORT, () => {
     console.log('Server running on ' + PORT);
-    logger.info('Server is running');
+    logger.info('Server is running'+ PORT);
   });
 });
+
+
 
 
 
