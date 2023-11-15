@@ -1,6 +1,6 @@
 [Unit]
 Description=My Node.js Application
-After=cloud-final.Service
+After=cloud-final.service
 
 [Service]
 User=csye6225
