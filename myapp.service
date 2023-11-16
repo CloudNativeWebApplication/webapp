@@ -1,6 +1,7 @@
 [Unit]
 Description=My Node.js Application
 After=cloud-final.service
+After=cloud-init.target
 
 [Service]
 User=csye6225
