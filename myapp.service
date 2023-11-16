@@ -6,6 +6,7 @@ After=cloud-init.target
 [Service]
 User=csye6225
 WorkingDirectory=/opt/csye6225
+ExecStartPre=/bin/sleep 450   
 ExecStart=/usr/bin/node /opt/csye6225/app.js
 Restart=always
 
