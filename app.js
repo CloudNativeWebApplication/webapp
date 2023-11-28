@@ -6,9 +6,14 @@ const { Sequelize } = require('sequelize');
 const bcrypt = require('bcrypt');
 const UserModel = require('./models/UserModel.js'); 
 const AssignmentModel = require('./models/AssignmentModel.js')
+const SubmissionModel = require('./models/SubmissionModel.js'); 
 const dotenv = require('dotenv');
 const winston = require('winston');
 const StatsD = require('node-statsd');
+const AWS = require('aws-sdk');
+const User = require('./models/UserModel');
+const Assignment = require('./models/AssignmentModel');
+const Submission = require('./models/SubmissionModel');
 
 
 
@@ -27,7 +32,8 @@ dotenv.config();
 const DATABASE_URL = process.env.DATABASE_URL;
 const DB_USERNAME = process.env.DB_USERNAME;
 const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_NAME = process.env.DB_NAME
+const DB_NAME = process.env.DB_NAME;
+const SNS_ARN = process.env.SNS_ARN;
 
 
 const sequelize = new Sequelize(DATABASE_URL, {
@@ -35,6 +41,13 @@ const sequelize = new Sequelize(DATABASE_URL, {
   username: DB_USERNAME,
   password: DB_PASSWORD,
 });
+
+// Define relationships
+User.hasMany(Assignment, { foreignKey: 'user_id' });
+Assignment.belongsTo(User, { foreignKey: 'user_id' });
+
+Assignment.hasMany(Submission, { foreignKey: 'assignment_id' });
+Submission.belongsTo(Assignment, { foreignKey: 'assignment_id' });
 
 
 async function createDatabase() {
@@ -133,6 +146,10 @@ async function startup() {
     // Synchronize the AssignmentModel with the database
     await AssignmentModel.sync();
     console.log('Assignment model synchronized with the database.');
+
+    await SubmissionModel.sync();
+    console.log('Submission model synchronized with the database.');
+
 
     for (const user of users) {
       if (!user.email || !user.password) {
@@ -507,6 +524,78 @@ app.put('/v1/assignments/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+function publishToSNSTopic(message, topicArn) {
+  // AWS SDK will automatically use the IAM role associated with the EC2 instance
+  const sns = new AWS.SNS();
+
+  const params = {
+    Message: JSON.stringify(message),
+    TopicArn: topicArn,
+  };
+
+  return sns.publish(params).promise();
+}
+
+app.post('/v1/assignments/:id/submission', authenticate, async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+    const { submission_url } = req.body;
+    const userEmail = req.user.email; 
+
+    // Check if the assignment's deadline has passed
+    const assignment = await AssignmentModel.findByPk(assignmentId);
+    if (new Date() > new Date(assignment.deadline)) {
+      return res.status(400).json({ error: 'Deadline for this assignment has passed' });
+    }
+
+    // Check for existing submissions and retry limit
+    const existingSubmissions = await SubmissionModel.findAll({
+      include: [{
+        model: AssignmentModel,
+        include: [{
+          model: UserModel,
+          where: { email: userEmail }
+        }]
+      }],
+      where: { assignment_id: assignmentId }
+    });
+
+    if (existingSubmissions.length >= assignment.num_of_attempts) {
+      return res.status(400).json({ error: 'Retry limit exceeded' });
+    }
+
+    // Create new submission
+    const newSubmission = await SubmissionModel.create({
+      assignment_id: assignmentId,
+      submission_url
+    });
+
+    // Prepare the message for SNS
+    const message = {
+      assignmentId: assignmentId,
+      submissionUrl: submission_url,
+      userEmail: userEmail
+    };
+
+  
+    const topicArn = SNS_ARN;
+
+    // Publish the message to the SNS topic
+    await publishToSNSTopic(message, topicArn);
+
+    res.status(201).json(newSubmission);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+
+
+
 
 logger.exceptions.handle(
   new winston.transports.File({ filename: 'csye6225.log' })
