@@ -525,6 +525,9 @@ app.put('/v1/assignments/:id', async (req, res) => {
   }
 });
 
+AWS.config.update({
+  region: 'us-east-1',  
+});
 
 function publishToSNSTopic(message, topicArn) {
   // AWS SDK will automatically use the IAM role associated with the EC2 instance
