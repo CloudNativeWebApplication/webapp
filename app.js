@@ -545,35 +545,47 @@ app.post('/v1/assignments/:id/submission', authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const { submission_url } = req.body;
-    const userEmail = req.user.email; 
+    const userEmail = req.user.email;
 
     // Check if the assignment's deadline has passed
     const assignment = await AssignmentModel.findByPk(assignmentId);
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
     if (new Date() > new Date(assignment.deadline)) {
       return res.status(400).json({ error: 'Deadline for this assignment has passed' });
     }
 
     // Check for existing submissions and retry limit
-    const existingSubmissions = await SubmissionModel.findAll({
+    const submissionCount = await SubmissionModel.count({
       include: [{
         model: AssignmentModel,
+        where: { id: assignmentId },
         include: [{
           model: UserModel,
           where: { email: userEmail }
         }]
-      }],
-      where: { assignment_id: assignmentId }
+      }]
     });
 
-    if (existingSubmissions.length >= assignment.num_of_attempts) {
+    if (submissionCount >= assignment.num_of_attempts) {
       return res.status(400).json({ error: 'Retry limit exceeded' });
     }
 
-    // Create new submission
-    const newSubmission = await SubmissionModel.create({
-      assignment_id: assignmentId,
-      submission_url
+    // Create or update submission
+    const [submission, created] = await SubmissionModel.findOrCreate({
+      where: { assignment_id: assignmentId },
+      defaults: {
+        submission_url,
+        submission_updated: new Date()
+      }
     });
+
+    if (!created) {
+      submission.submission_url = submission_url;
+      submission.submission_updated = new Date();
+      await submission.save();
+    }
 
     // Prepare the message for SNS
     const message = {
@@ -582,22 +594,17 @@ app.post('/v1/assignments/:id/submission', authenticate, async (req, res) => {
       userEmail: userEmail
     };
 
-  
     const topicArn = SNS_ARN;
 
     // Publish the message to the SNS topic
-    await publishToSNSTopic(message, topicArn);
+     await publishToSNSTopic(message, topicArn);
 
-    res.status(201).json(newSubmission);
+    res.status(created ? 201 : 200).json(submission);
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
-
-
-
 
 
 logger.exceptions.handle(
