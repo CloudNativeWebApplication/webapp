@@ -61,7 +61,7 @@ jobs:
                        -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
                        debian12-ami.pkr.hcl | sudo tee output.txt
           AMI_ID=$(tail -2 output.txt | head -2 | awk 'match($0, /ami-.*/) { print substr($0, RSTART, RLENGTH) }')
-          echo "$AMI_ID" > ami_id.txt
+          echo "$AMI_ID" > amiankithid.txt 
 
       - name: Upload AMI ID as artifact
         uses: actions/upload-artifact@v2
