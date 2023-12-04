@@ -60,11 +60,49 @@ jobs:
                        -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
                        -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
                        debian12-ami.pkr.hcl | sudo tee output.txt
-          AMI_ID=$(tail -2 output.txt | head -2 | awk 'match($0, /ami-.*/) { print substr($0, RSTART, RLENGTH) }')
-          echo "$AMI_ID" > amiankithid.txt 
+          tail -2 output.txt | head -2 | awk 'match($0, /ami-.*/) { print substr($0, RSTART, RLENGTH) }' >> ami.txt
 
-      - name: Upload AMI ID as artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: amiankithid
-          path: amiankithid.txt   
+      - name: Create new launch template version
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          AMI_ID=$(cat ami.txt)
+          LAUNCH_TEMPLATE_NAME=$(aws ec2 describe-launch-templates --query 'LaunchTemplates[?starts_with(LaunchTemplateName, `launchTemplate`) == `true`].LaunchTemplateName' --output text)
+          aws ec2 create-launch-template-version --launch-template-name $LAUNCH_TEMPLATE_NAME --version-description latest --source-version 1 --launch-template-data "ImageId=$AMI_ID"
+
+      - name: Update the autoscaling group
+        id: set_asg_name
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          AUTO_SCALING_GROUP_NAME=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?starts_with(AutoScalingGroupName, 'autoScalingGroup-')].AutoScalingGroupName" --output text | head -n 1)
+          if [ -z "$AUTO_SCALING_GROUP_NAME" ]; then
+              echo "No Auto Scaling Group found with the specified prefix."
+              exit 1
+          fi
+          echo "Auto Scaling Group Name: $AUTO_SCALING_GROUP_NAME"
+          echo "AUTO_SCALING_GROUP_NAME=$AUTO_SCALING_GROUP_NAME" >> $GITHUB_ENV
+          aws autoscaling update-auto-scaling-group --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --launch-template LaunchTemplateName=launchTemplate-941aa22,Version='$Latest'
+
+      - name: Instance refresh and wait
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          REFRESH_ID=$(aws autoscaling start-instance-refresh --auto-scaling-group-name "$AUTO_SCALING_GROUP_NAME" --query 'InstanceRefreshId' --output text)
+          STATUS="pending"
+          while [ "$STATUS" != "Successful" ]; do
+            echo "Waiting for instance refresh to complete..."
+            sleep 60 
+            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name "$AUTO_SCALING_GROUP_NAME" --instance-refresh-ids $REFRESH_ID --query 'InstanceRefreshes[0].Status' --output text)
+            if [ "$STATUS" == "Failed" ]; then
+              echo "Instance refresh failed."
+              exit 1
+            fi
+          done
+          echo "Instance refresh completed ."
