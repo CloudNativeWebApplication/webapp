@@ -66,5 +66,5 @@ jobs:
       - name: Upload AMI ID as artifact
         uses: actions/upload-artifact@v2
         with:
-          name: ami-id
-          path: ami_id.txt   
+          name: amiankithid
+          path: amiankithid.txt   
