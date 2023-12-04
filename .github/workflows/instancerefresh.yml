@@ -9,6 +9,7 @@ on:
 jobs:
   update-infrastructure:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout Repository
@@ -21,17 +22,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Download AMI ID artifact
+      - name: Wait and Download AMI ID artifact
         uses: actions/download-artifact@v2
         with:
           name: ami-id
 
-      - name: Unzip Artifact
-        run: unzip ami-id.zip
-
       - name: Read AMI ID from the file
         run: |
-          AMI_ID=$(cat ami_id.txt)
+          AMI_ID=$(cat ami-id/ami_id.txt)
           echo "AMI ID: $AMI_ID"
 
       - name: Create new launch template version
