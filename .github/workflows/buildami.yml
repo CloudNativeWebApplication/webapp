@@ -78,8 +78,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          AUTO_SCALING_GROUP_NAME=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?starts_with(AutoScalingGroupName, 'autoScalingGroup')].AutoScalingGroupName" --output text)
-          aws autoscaling update-auto-scaling-group --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version='$Latest'
+          # Fetch the first ASG name that starts with 'autoScalingGroup-'
+          AUTO_SCALING_GROUP_NAME=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?starts_with(AutoScalingGroupName, 'autoScalingGroup-')].AutoScalingGroupName" --output text | head -n 1)
+          if [ -z "$AUTO_SCALING_GROUP_NAME" ]; then
+              echo "No Auto Scaling Group found with the specified prefix."
+              exit 1
+          fi
+          echo "Updating Auto Scaling Group: $AUTO_SCALING_GROUP_NAME"
+          aws autoscaling update-auto-scaling-group --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --launch-template LaunchTemplateName=launchTemplate-941aa22,Version='$Latest'
 
       - name: Instance refresh and wait
         env:
