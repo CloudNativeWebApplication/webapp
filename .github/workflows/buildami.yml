@@ -61,16 +61,15 @@ jobs:
                        -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
                        debian12-ami.pkr.hcl | sudo tee output.txt
           tail -2 output.txt | head -2 | awk 'match($0, /ami-.*/) { print substr($0, RSTART, RLENGTH) }' >> ami.txt
-      
-      - name: Create new launch template version
+            - name: Create new launch template version
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          cat ami.txt | while read AMI_ID; do 
-            aws ec2 create-launch-template-version --launch-template-name launchTemplate --version-description latest --source-version 1 --launch-template-data "ImageId=$AMI_ID"
-          done
+          AMI_ID=$(cat ami.txt)
+          LAUNCH_TEMPLATE_NAME=$(aws ec2 describe-launch-templates --query 'LaunchTemplates[?starts_with(LaunchTemplateName, `launchTemplate`) == `true`].LaunchTemplateName' --output text)
+          aws ec2 create-launch-template-version --launch-template-name $LAUNCH_TEMPLATE_NAME --version-description latest --source-version 1 --launch-template-data "ImageId=$AMI_ID"
 
       - name: Update the autoscaling group
         env:
@@ -78,7 +77,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          aws autoscaling update-auto-scaling-group --auto-scaling-group-name autoScalingGroup --launch-template LaunchTemplateName=launchTemplate,Version='$Latest'
+          AUTO_SCALING_GROUP_NAME=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?starts_with(AutoScalingGroupName, 'autoScalingGroup')].AutoScalingGroupName" --output text)
+          aws autoscaling update-auto-scaling-group --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version='$Latest'
 
       - name: Instance refresh and wait
         env:
@@ -87,14 +87,14 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
           # Start the instance refresh
-          REFRESH_ID=$(aws autoscaling start-instance-refresh --auto-scaling-group-name autoScalingGroup --query 'InstanceRefreshId' --output text)
+          REFRESH_ID=$(aws autoscaling start-instance-refresh --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --query 'InstanceRefreshId' --output text)
     
           # Check the status of the instance refresh
           STATUS="pending"
           while [ "$STATUS" != "Successful" ]; do
             echo "Waiting for instance refresh to complete..."
             sleep 60 
-            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name autoScalingGroup --instance-refresh-ids $REFRESH_ID --query 'InstanceRefreshes[0].Status' --output text)
+            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --instance-refresh-ids $REFRESH_ID --query 'InstanceRefreshes[0].Status' --output text)
             if [ "$STATUS" == "Failed" ]; then
               echo "Instance refresh failed."
               exit 1
