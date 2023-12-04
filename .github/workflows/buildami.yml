@@ -54,20 +54,22 @@ jobs:
         run: packer plugins install github.com/hashicorp/amazon
 
       - name: Run Packer
+        id: packer-build
         run: |
           # Install Packer
           curl -fsSL https://releases.hashicorp.com/packer/1.7.3/packer_1.7.3_linux_amd64.zip -o packer.zip
           unzip packer.zip
           sudo mv packer /usr/local/bin/
           packer init debian12-ami.pkr.hcl
-
-          # Run Packer build (modify this command as needed)
-          packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
+      
+          # Run Packer build and capture the AMI ID output
+          AMI_ID=$(packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
                      -var "source_ami=${{ secrets.SOURCE_AMI }}" \
                      -var "aws_region=${{ secrets.AWS_REGION }}" \
-                     -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY}}" \
-                     -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY}}" \
-                      debian12-ami.pkr.hcl | grep 'AMI: ami-' | awk '{print $2}')
+                     -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+                     -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
+                      debian12-ami.pkr.hcl | tee /tmp/packer_output.txt)
+          AMI_ID=$(grep 'AMI: ami-' /tmp/packer_output.txt | awk '{print $2}')
           echo "::set-output name=ami-id::$AMI_ID"
 
       - name: Create Launch Template using AWS SDK
