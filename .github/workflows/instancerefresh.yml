@@ -26,6 +26,9 @@ jobs:
         with:
           name: ami-id
 
+      - name: Unzip Artifact
+        run: unzip ami-id.zip
+
       - name: Read AMI ID from the file
         run: |
           AMI_ID=$(cat ami_id.txt)
