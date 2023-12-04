@@ -25,11 +25,11 @@ jobs:
       - name: Wait and Download AMI ID artifact
         uses: actions/download-artifact@v2
         with:
-          name: ami-id
+          name: amiankithid
 
       - name: Read AMI ID from the file
         run: |
-          AMI_ID=$(cat ami-id/ami_id.txt)
+          AMI_ID=$(cat amiankithid/amiankithid.txt)
           echo "AMI ID: $AMI_ID"
 
       - name: Create new launch template version
