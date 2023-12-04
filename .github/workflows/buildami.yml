@@ -52,61 +52,54 @@ jobs:
       - name: Install Packer plugin
         run: packer plugins install github.com/hashicorp/amazon
 
-      - name: Run Packer
+      - name: Building Packer Template
         run: |
-          # Install Packer
-          curl -fsSL https://releases.hashicorp.com/packer/1.7.3/packer_1.7.3_linux_amd64.zip -o packer.zip
-          unzip packer.zip
-          sudo mv packer /usr/local/bin/
-          packer init debian12-ami.pkr.hcl
-
-          # Run Packer build and capture the output
-          OUTPUT=$(packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
-                                -var "source_ami=${{ secrets.SOURCE_AMI }}" \
-                                -var "aws_region=${{ secrets.AWS_REGION }}" \
-                                -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-                                -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
-                                debian12-ami.pkr.hcl)
-          echo "$OUTPUT"
+          packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
+                       -var "source_ami=${{ secrets.SOURCE_AMI }}" \
+                       -var "aws_region=${{ secrets.AWS_REGION }}" \
+                       -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+                       -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
+                       debian12-ami.pkr.hcl | sudo tee output.txt
+          tail -2 output.txt | head -2 | awk 'match($0, /ami-.*/) { print substr($0, RSTART, RLENGTH) }' >> ami.txt
       
-          # Extract the AMI ID from the output
-          AMI_ID=$(echo "$OUTPUT" | grep 'AMI ID' | cut -d' ' -f3)  # Adjust this line based on your actual Packer output format
-          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-
-      - name: Update Launch Template with Demo Credentials
+      - name: Create new launch template
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          # Assuming $AMI_ID contains the new AMI ID
-          aws ec2 create-launch-template-version --launch-template-id <template_id> --source-version <version> --launch-template-data "{\"ImageId\":\"$AMI_ID\"}"
+          cat ami.txt | while read AMI_ID; do 
+            aws ec2 create-launch-template-version --launch-template-name asg_launch_config --version-description latest --source-version 1 --launch-template-data "ImageId=$AMI_ID"
+          done
 
-      - name: Trigger Instance Refresh with Demo Credentials
+      - name: Update the autoscaling group
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          aws autoscaling start-instance-refresh --auto-scaling-group-name <group_name> --strategy <strategy>
+          AUTO_SCALING_GROUP_NAME=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?starts_with(AutoScalingGroupName,'app-')].AutoScalingGroupName" --output text)
+          aws autoscaling update-auto-scaling-group --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --launch-template LaunchTemplateName=asg_launch_config,Version='$Latest'
 
-      - name: Wait for Instance Refresh Completion with Demo Credentials
+      - name: Instance refresh and wait
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          # Loop to check the status of instance refresh
-          while : ; do
-            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name <group_name> --query 'InstanceRefreshes[0].Status' --output text)
-            if [ "$STATUS" == "Successful" ]; then
-              echo "Instance refresh completed successfully."
-              break
-            elif [ "$STATUS" == "Failed" ]; then
+          # Start the instance refresh
+          REFRESH_ID=$(aws autoscaling start-instance-refresh --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --query 'InstanceRefreshId' --output text)
+    
+          # Check the status of the instance refresh
+          STATUS="pending"
+          while [ "$STATUS" != "Successful" ]; do
+            echo "Waiting for instance refresh to complete..."
+            sleep 60 
+            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name $AUTO_SCALING_GROUP_NAME --instance-refresh-ids $REFRESH_ID --query 'InstanceRefreshes[0].Status' --output text)
+            if [ "$STATUS" == "Failed" ]; then
               echo "Instance refresh failed."
               exit 1
-            else
-              echo "Waiting for instance refresh to complete..."
-              sleep 60
             fi
           done
+
+          echo "Instance refresh completed successfully."
