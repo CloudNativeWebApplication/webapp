@@ -38,7 +38,6 @@ jobs:
       - name: Run Integration Tests in the Background
         run: npx mocha tests/healthz.test.js &
 
-
       - name: Create Zip File
         run: |
           rm -r node_modules
@@ -54,52 +53,60 @@ jobs:
         run: packer plugins install github.com/hashicorp/amazon
 
       - name: Run Packer
-        id: packer-build
         run: |
           # Install Packer
           curl -fsSL https://releases.hashicorp.com/packer/1.7.3/packer_1.7.3_linux_amd64.zip -o packer.zip
           unzip packer.zip
           sudo mv packer /usr/local/bin/
           packer init debian12-ami.pkr.hcl
+
+          # Run Packer build and capture the output
+          OUTPUT=$(packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
+                                -var "source_ami=${{ secrets.SOURCE_AMI }}" \
+                                -var "aws_region=${{ secrets.AWS_REGION }}" \
+                                -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+                                -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
+                                debian12-ami.pkr.hcl)
+          echo "$OUTPUT"
       
-          # Run Packer build and capture the AMI ID output
-          AMI_ID=$(packer build -var "demo_account_id=${{ secrets.DEMO_ACCOUNT_ID }}" \
-                     -var "source_ami=${{ secrets.SOURCE_AMI }}" \
-                     -var "aws_region=${{ secrets.AWS_REGION }}" \
-                     -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-                     -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
-                      debian12-ami.pkr.hcl | tee /tmp/packer_output.txt)
-          AMI_ID=$(grep 'AMI: ami-' /tmp/packer_output.txt | awk '{print $2}')
-          echo "::set-output name=ami-id::$AMI_ID"
+          # Extract the AMI ID from the output
+          AMI_ID=$(echo "$OUTPUT" | grep 'AMI ID' | cut -d' ' -f3)  # Adjust this line based on your actual Packer output format
+          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
 
-      - name: Create Launch Template using AWS SDK
-        run: |
-          npm install aws-sdk
-          const AWS = require('aws-sdk');
-          AWS.config.update({ region: process.env.AWS_REGION });
-
-          const ec2 = new AWS.EC2();
-          const userDataScript = `#!/bin/bash
-          # Placeholder for environment variables
-          # These will be replaced later by Pulumi`;
-
-          const launchTemplateData = {
-              ImageId: process.env.AMI_ID, 
-              InstanceType: 't2.micro',
-              UserData: Buffer.from(userDataScript).toString('base64'),
-              // ... other configurations ...
-          };
-
-          ec2.createLaunchTemplate({
-              LaunchTemplateName: 'MyLaunchTemplate',
-              LaunchTemplateData: launchTemplateData
-          }, (err, data) => {
-              if (err) console.error(err, err.stack);
-              else console.log(data);
-          });
+      - name: Update Launch Template with Demo Credentials
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AMI_ID: ${{ steps.packer-build.outputs.ami-id }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          # Assuming $AMI_ID contains the new AMI ID
+          aws ec2 create-launch-template-version --launch-template-id <template_id> --source-version <version> --launch-template-data "{\"ImageId\":\"$AMI_ID\"}"
 
+      - name: Trigger Instance Refresh with Demo Credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws autoscaling start-instance-refresh --auto-scaling-group-name <group_name> --strategy <strategy>
+
+      - name: Wait for Instance Refresh Completion with Demo Credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          # Loop to check the status of instance refresh
+          while : ; do
+            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name <group_name> --query 'InstanceRefreshes[0].Status' --output text)
+            if [ "$STATUS" == "Successful" ]; then
+              echo "Instance refresh completed successfully."
+              break
+            elif [ "$STATUS" == "Failed" ]; then
+              echo "Instance refresh failed."
+              exit 1
+            else
+              echo "Waiting for instance refresh to complete..."
+              sleep 60
+            fi
+          done
