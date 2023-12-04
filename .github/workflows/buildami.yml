@@ -67,4 +67,37 @@ jobs:
                      -var "aws_region=${{ secrets.AWS_REGION }}" \
                      -var "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY}}" \
                      -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY}}" \
-                      debian12-ami.pkr.hcl
+                      debian12-ami.pkr.hcl | grep 'AMI: ami-' | awk '{print $2}')
+          echo "::set-output name=ami-id::$AMI_ID"
+
+      - name: Create Launch Template using AWS SDK
+        run: |
+          npm install aws-sdk
+          const AWS = require('aws-sdk');
+          AWS.config.update({ region: process.env.AWS_REGION });
+
+          const ec2 = new AWS.EC2();
+          const userDataScript = `#!/bin/bash
+          # Placeholder for environment variables
+          # These will be replaced later by Pulumi`;
+
+          const launchTemplateData = {
+              ImageId: process.env.AMI_ID, 
+              InstanceType: 't2.micro',
+              UserData: Buffer.from(userDataScript).toString('base64'),
+              // ... other configurations ...
+          };
+
+          ec2.createLaunchTemplate({
+              LaunchTemplateName: 'MyLaunchTemplate',
+              LaunchTemplateData: launchTemplateData
+          }, (err, data) => {
+              if (err) console.error(err, err.stack);
+              else console.log(data);
+          });
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEMO_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEMO_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AMI_ID: ${{ steps.packer-build.outputs.ami-id }}
+
