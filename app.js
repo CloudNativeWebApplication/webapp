@@ -270,7 +270,7 @@ app.use(express.json());
 
 
 // Create Assignment
-app.post('/v2/assignments', authenticate, async (req, res) => {
+app.post('/v1/assignments', authenticate, async (req, res) => {
   try {
     await sequelize.authenticate();
     // Specify the fields you want to accept
@@ -355,7 +355,7 @@ app.post('/v2/assignments', authenticate, async (req, res) => {
 
 
 // Delete Assignment by ID
-app.delete('/v2/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.delete('/v1/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
 
@@ -390,7 +390,7 @@ app.delete('/v2/assignments/:id',rejectRequestsWithBody, authenticate, async (re
 
 
 // Get Assignment by ID
-app.get('/v2/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v1/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.assignmentId;
 
@@ -415,13 +415,13 @@ app.get('/v2/assignments/:assignmentId', rejectRequestsWithBody, authenticate, a
   }
 });
 
-app.patch('/v2/assignments/:id', (req, res) => {
+app.patch('/v1/assignments/:id', (req, res) => {
   res.status(405).json({ error: 'Update (PATCH) is not allowed' });
 
 });
 
 // Get all Assignments of a user by authentication
-app.get('/v2/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v1/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     // Use the authenticated user from the middleware
     const authenticatedUser = req.user;
@@ -446,7 +446,7 @@ app.get('/v2/assignments',rejectRequestsWithBody, authenticate, async (req, res)
   }
 });
 
-app.put('/v2/assignments/:id', async (req, res) => {
+app.put('/v1/assignments/:id', async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const updatedAssignmentData = req.body;
@@ -541,51 +541,47 @@ function publishToSNSTopic(message, topicArn) {
   return sns.publish(params).promise();
 }
 
-app.post('/v2/assignments/:id/submission', authenticate, async (req, res) => {
+
+app.post('/v1/assignments/:id/submission', authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const { submission_url } = req.body;
-    const userEmail = req.user.email;
+    const userEmail = req.user.email; 
+
+    // Check if submission_url exists and is a non-empty string
+    if (!submission_url || typeof submission_url !== 'string' || !submission_url.trim()) {
+      return res.status(400).json({ error: 'Submission URL is missing or empty' });
+    }
+
 
     // Check if the assignment's deadline has passed
     const assignment = await AssignmentModel.findByPk(assignmentId);
-    if (!assignment) {
-      return res.status(404).json({ error: 'Assignment not found' });
-    }
     if (new Date() > new Date(assignment.deadline)) {
       return res.status(400).json({ error: 'Deadline for this assignment has passed' });
     }
 
     // Check for existing submissions and retry limit
-    const submissionCount = await SubmissionModel.count({
+    const existingSubmissions = await SubmissionModel.findAll({
       include: [{
         model: AssignmentModel,
-        where: { id: assignmentId },
         include: [{
           model: UserModel,
           where: { email: userEmail }
         }]
-      }]
+      }],
+      where: { assignment_id: assignmentId }
     });
 
-    if (submissionCount >= assignment.num_of_attempts) {
+    if (existingSubmissions.length >= assignment.num_of_attempts) {
       return res.status(400).json({ error: 'Retry limit exceeded' });
     }
 
-    // Create or update submission
-    const [submission, created] = await SubmissionModel.findOrCreate({
-      where: { assignment_id: assignmentId },
-      defaults: {
-        submission_url,
-        submission_updated: new Date()
-      }
+    // Create new submission
+    const newSubmission = await SubmissionModel.create({
+      assignment_id: assignmentId,
+      submission_url
     });
 
-    if (!created) {
-      submission.submission_url = submission_url;
-      submission.submission_updated = new Date();
-      await submission.save();
-    }
 
     // Prepare the message for SNS
     const message = {
@@ -594,17 +590,25 @@ app.post('/v2/assignments/:id/submission', authenticate, async (req, res) => {
       userEmail: userEmail
     };
 
+
+
+  
     const topicArn = SNS_ARN;
 
     // Publish the message to the SNS topic
      await publishToSNSTopic(message, topicArn);
 
-    res.status(created ? 201 : 200).json(submission);
+    res.status(201).json(newSubmission);
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(503).json({ error: 'Service Unavailable' });
   }
 });
+
+  
+    
+
+  
 
 
 logger.exceptions.handle(
