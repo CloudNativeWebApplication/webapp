@@ -270,7 +270,7 @@ app.use(express.json());
 
 
 // Create Assignment
-app.post('/demo/assignments', authenticate, async (req, res) => {
+app.post('/v3/assignments', authenticate, async (req, res) => {
   try {
     await sequelize.authenticate();
     // Specify the fields you want to accept
@@ -355,7 +355,7 @@ app.post('/demo/assignments', authenticate, async (req, res) => {
 
 
 // Delete Assignment by ID
-app.delete('/demo/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.delete('/v3/assignments/:id',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
 
@@ -390,7 +390,7 @@ app.delete('/demo/assignments/:id',rejectRequestsWithBody, authenticate, async (
 
 
 // Get Assignment by ID
-app.get('/demo/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v3/assignments/:assignmentId', rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.assignmentId;
 
@@ -415,13 +415,13 @@ app.get('/demo/assignments/:assignmentId', rejectRequestsWithBody, authenticate,
   }
 });
 
-app.patch('/demo/assignments/:id', (req, res) => {
+app.patch('/v3/assignments/:id', (req, res) => {
   res.status(405).json({ error: 'Update (PATCH) is not allowed' });
 
 });
 
 // Get all Assignments of a user by authentication
-app.get('/demo/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
+app.get('/v3/assignments',rejectRequestsWithBody, authenticate, async (req, res) => {
   try {
     // Use the authenticated user from the middleware
     const authenticatedUser = req.user;
@@ -446,7 +446,7 @@ app.get('/demo/assignments',rejectRequestsWithBody, authenticate, async (req, re
   }
 });
 
-app.put('/demo/assignments/:id', async (req, res) => {
+app.put('/v3/assignments/:id', async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const updatedAssignmentData = req.body;
@@ -542,7 +542,7 @@ function publishToSNSTopic(message, topicArn) {
 }
 
 
-app.post('/demo/assignments/:id/submission', authenticate, async (req, res) => {
+app.post('/v3/assignments/:id/submission', authenticate, async (req, res) => {
   try {
     const assignmentId = req.params.id;
     const { submission_url } = req.body;
